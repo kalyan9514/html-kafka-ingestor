@@ -17,6 +17,9 @@ This pipeline is deployed and running on Railway.
 | Consumer | Live — listening for messages |
 | Producer | Deployed — triggers on each run |
 
+**CI/CD:** GitHub Actions runs build, vet, and tests on every push to main. 
+Railway auto-deploys the consumer only after all CI checks pass.
+
 **Stack:** Go 1.26 · Apache Kafka · MySQL 8.0 · Docker · Railway
 
 ---
