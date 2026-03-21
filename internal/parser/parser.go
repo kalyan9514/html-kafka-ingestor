@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"golang.org/x/net/html"
 )
@@ -215,9 +216,12 @@ func isHeaderRepeat(cells, headers []string) bool {
     return matches > len(headers)/2
 }
 
+// inferColumnType samples all values in a column and returns the tightest SQL type.
+// Priority: DATE > INT > FLOAT > VARCHAR. Defaults to VARCHAR if any value is clearly text.
 func inferColumnType(colIdx int, rows [][]string) string {
 	isInt := true
 	isFloat := true
+	isDate := true
 	hasValue := false
 
 	for _, row := range rows {
@@ -228,11 +232,23 @@ func inferColumnType(colIdx int, rows [][]string) string {
 		if raw == "" {
 			continue
 		}
+
+		hasValue = true
+
+		// check for date before numeric cleaning — dashes in dates would be stripped
+		if looksLikeDate(raw) {
+			isInt = false
+			isFloat = false
+			continue
+		}
+
+		isDate = false
+
 		cleaned := cleanNumeric(raw)
 		if cleaned == "" {
 			return "VARCHAR(255)"
 		}
-		hasValue = true
+
 		if _, err := strconv.ParseInt(cleaned, 10, 64); err != nil {
 			isInt = false
 		}
@@ -244,6 +260,9 @@ func inferColumnType(colIdx int, rows [][]string) string {
 	if !hasValue {
 		return "VARCHAR(255)"
 	}
+	if isDate {
+		return "DATE"
+	}
 	if isInt {
 		return "INT"
 	}
@@ -251,4 +270,25 @@ func inferColumnType(colIdx int, rows [][]string) string {
 		return "FLOAT"
 	}
 	return "VARCHAR(255)"
+}
+
+// looksLikeDate checks if a string matches common date formats.
+// Supports YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY, and natural formats like "January 2, 2006".
+func looksLikeDate(s string) bool {
+	formats := []string{
+		"2006-01-02",
+		"02/01/2006",
+		"01/02/2006",
+		"2006/01/02",
+		"January 2, 2006",
+		"Jan 2, 2006",
+		"2 January 2006",
+		"02-01-2006",
+	}
+	for _, f := range formats {
+		if _, err := time.Parse(f, s); err == nil {
+			return true
+		}
+	}
+	return false
 }

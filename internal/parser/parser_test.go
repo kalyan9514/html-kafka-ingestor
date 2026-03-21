@@ -69,6 +69,12 @@ func TestInferColumnType(t *testing.T) {
 			rows:     [][]string{{""}},
 			expected: "VARCHAR(255)",
 		},
+		{
+    		name:     "date values",
+    		colIdx:   0,
+    		rows:     [][]string{{"2024-01-15"}, {"2023-06-30"}},
+    		expected: "DATE",
+		},
 	}
 
 	for _, tt := range tests {
