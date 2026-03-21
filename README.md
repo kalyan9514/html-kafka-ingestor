@@ -6,6 +6,21 @@ Built as a take-home assignment for SellWizr's Forward Deployed Engineer role.
 
 ---
 
+## Live Deployment
+
+This pipeline is deployed and running on Railway.
+
+| Service | Status |
+|---------|--------|
+| Kafka Broker | Railway — kafka.railway.internal:29092 |
+| MySQL | Railway — 50 rows ingested |
+| Consumer | Live — listening for messages |
+| Producer | Deployed — triggers on each run |
+
+**Stack:** Go 1.26 · Apache Kafka · MySQL 8.0 · Docker · Railway
+
+---
+
 ## Architecture
 ```
 HTTP URL
