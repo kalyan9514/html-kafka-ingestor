@@ -46,7 +46,7 @@ Kafka Producer → [html-records topic]
 
 | Component | Technology |
 |-----------|------------|
-| Language | Go 1.22 |
+| Language | Go 1.26 |
 | Message Queue | Apache Kafka |
 | Database | MySQL 8.0 |
 | Metrics | Prometheus + Grafana |
