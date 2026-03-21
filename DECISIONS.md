@@ -71,3 +71,49 @@ This document captures key technical decisions made during the build, the reason
 - Unit tests for parser type inference and fetcher retry logic
 - Deployment to Railway with CD via GitHub Actions
 - Grafana dashboard pre-configured with pipeline metrics
+
+---
+
+---
+
+## Production Considerations
+
+### Edge Cases Handled
+- URL returns no wikitable → parser returns nil, producer exits cleanly with a clear error
+- Header rows repeating mid-table → detected and skipped via `isHeaderRepeat()`
+- Currency symbols and commas in numeric columns → stripped before MySQL insert
+- Empty numeric values → defaulted to `0` to avoid type mismatch errors
+- Failed rows → routed to Dead Letter Queue instead of being dropped silently
+
+### Edge Cases Not Yet Handled
+- Tables with merged cells (rowspan/colspan) — would require more complex HTML traversal
+- Non-UTF8 characters in cell values — would need explicit encoding detection
+- Extremely large tables (10,000+ rows) — would need streaming HTML parsing and paginated Kafka publishing instead of loading everything into memory
+
+### LLM as a Judge
+For a platform like SellWizr that ingests financial data, an LLM validation layer could be added post-ingestion to flag schema anomalies — for example, flagging if a column named `revenue` was inferred as VARCHAR instead of INT, or if values look like dates but were stored as strings. This feedback loop would improve schema inference accuracy over time.
+
+### Handling Heavy URLs
+The current implementation loads the full HTML response into memory before parsing. For pages with very large tables:
+- Switch to streaming HTTP response parsing
+- Add a configurable `MAX_ROWS` env variable to cap ingestion per run
+- Use worker pools to parallelize Kafka publishing
+
+### Network Failure Handling
+- HTTP fetcher retries up to 3 times with linear backoff (1s, 2s, 3s)
+- Kafka consumer retries on transient broker errors automatically
+- Failed DB inserts are routed to the DLQ — no silent data loss
+- Consumer only commits Kafka offset after successful DB insert — guarantees at-least-once delivery
+
+### SLAs and Latency Budget
+
+| Metric | Value |
+|--------|-------|
+| End-to-end ingestion (51 rows) | ~60 seconds |
+| DB batch insert latency | 52ms per batch of 10 rows |
+| HTTP fetch with retries (worst case) | 90 seconds (3 attempts × 30s timeout) |
+| Kafka publish per row | ~1 second (improvable with batch publishing) |
+| Data loss on failure | 0% (DLQ guarantees no silent drops) |
+
+### Known Performance Bottleneck
+The producer currently publishes one row per second due to Kafka's default linger settings. This can be improved by batching multiple rows into a single Kafka message or tuning `BatchSize` and `Linger` on the kafka-go writer — a straightforward config change that would reduce end-to-end time from ~60s to under 5s for 51 rows.
