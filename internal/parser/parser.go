@@ -143,42 +143,6 @@ func inferSchema(headers []string, rows [][]string) []Column {
 	return columns
 }
 
-// inferColumnType samples all values in a column and returns the tightest SQL type.
-// INT is preferred over FLOAT, FLOAT over VARCHAR — matches MySQL best practices.
-func inferColumnType(colIdx int, rows [][]string) string {
-	isInt := true
-	isFloat := true
-
-	for _, row := range rows {
-		if colIdx >= len(row) {
-			continue
-		}
-		raw := strings.TrimSpace(row[colIdx])
-		if raw == "" {
-			continue
-		}
-		// check raw value first — if it contains letters it's VARCHAR
-		cleaned := cleanNumeric(raw)
-		if cleaned == "" {
-			return "VARCHAR(255)" // raw had content but no numbers — definitely text
-		}
-		if _, err := strconv.ParseInt(cleaned, 10, 64); err != nil {
-			isInt = false
-		}
-		if _, err := strconv.ParseFloat(cleaned, 64); err != nil {
-			isFloat = false
-		}
-	}
-
-	if isInt {
-		return "INT"
-	}
-	if isFloat {
-		return "FLOAT"
-	}
-	return "VARCHAR(255)"
-}
-
 // textContent extracts visible text from an HTML node, skipping footnote markers.
 func textContent(n *html.Node) string {
 	if n.Type == html.ElementNode && n.Data == "sup" {
@@ -235,4 +199,42 @@ func isHeaderRepeat(cells, headers []string) bool {
         }
     }
     return matches > len(headers)/2
+}
+
+func inferColumnType(colIdx int, rows [][]string) string {
+	isInt := true
+	isFloat := true
+	hasValue := false
+
+	for _, row := range rows {
+		if colIdx >= len(row) {
+			continue
+		}
+		raw := strings.TrimSpace(row[colIdx])
+		if raw == "" {
+			continue
+		}
+		cleaned := cleanNumeric(raw)
+		if cleaned == "" {
+			return "VARCHAR(255)"
+		}
+		hasValue = true
+		if _, err := strconv.ParseInt(cleaned, 10, 64); err != nil {
+			isInt = false
+		}
+		if _, err := strconv.ParseFloat(cleaned, 64); err != nil {
+			isFloat = false
+		}
+	}
+
+	if !hasValue {
+		return "VARCHAR(255)"
+	}
+	if isInt {
+		return "INT"
+	}
+	if isFloat {
+		return "FLOAT"
+	}
+	return "VARCHAR(255)"
 }

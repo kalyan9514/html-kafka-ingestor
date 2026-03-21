@@ -25,3 +25,6 @@ jobs:
       - name: Vet
         # go vet catches common mistakes like unreachable code and wrong format strings
         run: go vet ./...
+
+      - name: Test
+        run: go test ./...
