@@ -8,7 +8,7 @@ This document captures key technical decisions made during the build, the reason
 
 **Decision:** Route all rows through Kafka before inserting into MySQL.
 
-**Why:** Direct DB writes couple the fetcher tightly to the database. If MySQL is slow or temporarily down, the entire pipeline blocks. Kafka decouples ingestion from persistence — the producer can keep publishing even if the consumer is down, and rows are safely buffered in Kafka until the consumer recovers.
+**Why:** Direct DB writes couple the fetcher tightly to the database. If MySQL is slow or temporarily down, the entire pipeline blocks. Kafka decouples ingestion from persistence,and the producer can keep publishing even if the consumer is down, and rows are safely buffered in Kafka until the consumer recovers.
 
 **Trade-off:** Adds operational complexity (Kafka + Zookeeper to manage). Acceptable for a production pipeline where reliability matters more than simplicity.
 
@@ -18,7 +18,7 @@ This document captures key technical decisions made during the build, the reason
 
 **Decision:** Rows are serialised as JSON rather than Avro with Schema Registry.
 
-**Why:** JSON requires no additional infrastructure and is human-readable — easier to debug during development. For this assignment, the schema is already inferred and passed as the first Kafka message, so Schema Registry's main benefit (schema enforcement across producers/consumers) is handled in application code.
+**Why:** JSON requires no additional infrastructure and is human-readable, easier to debug during development. For this assignment, the schema is already inferred and passed as the first Kafka message, so Schema Registry's main benefit (schema enforcement across producers/consumers) is handled in application code.
 
 **Trade-off:** Avro is more efficient (binary format, smaller messages) and enforces schema evolution rules. In a high-throughput production system, Avro would be the right choice. JSON is the pragmatic choice here.
 
@@ -30,7 +30,7 @@ This document captures key technical decisions made during the build, the reason
 
 **Why:** The system is designed to work with any URL and any table structure. Hardcoding a schema would make it brittle — it would only work for one specific table. Dynamic inference makes it genuinely extensible.
 
-**Trade-off:** Inference can be wrong — especially with mixed or ambiguous data (e.g. a column that is mostly numbers but has some text values). We handle this by defaulting to VARCHAR when inference is uncertain, which is always safe for MySQL.
+**Trade-off:** Inference can be wrong, especially with mixed or ambiguous data (e.g. a column that is mostly numbers but has some text values). We handle this by defaulting to VARCHAR when inference is uncertain, which is always safe for MySQL. DATE detection checks common formats (YYYY-MM-DD, DD/MM/YYYY, natural language) before numeric cleaning and this ordering matters because date separators like `-` would otherwise be stripped by `cleanNumeric`.
 
 ---
 
@@ -68,11 +68,7 @@ This document captures key technical decisions made during the build, the reason
 
 - Avro serialisation with Confluent Schema Registry
 - Database transactions for atomic batch inserts
-- Unit tests for parser type inference and fetcher retry logic
-- Deployment to Railway with CD via GitHub Actions
-- Grafana dashboard pre-configured with pipeline metrics
-
----
+- Unit tests for DB and API layers
 
 ---
 
@@ -86,12 +82,12 @@ This document captures key technical decisions made during the build, the reason
 - Failed rows → routed to Dead Letter Queue instead of being dropped silently
 
 ### Edge Cases Not Yet Handled
-- Tables with merged cells (rowspan/colspan) — would require more complex HTML traversal
-- Non-UTF8 characters in cell values — would need explicit encoding detection
-- Extremely large tables (10,000+ rows) — would need streaming HTML parsing and paginated Kafka publishing instead of loading everything into memory
+- Tables with merged cells (rowspan/colspan) would require more complex HTML traversal
+- Non-UTF8 characters in cell values would need explicit encoding detection
+- Extremely large tables (10,000+ rows) would need streaming HTML parsing and paginated Kafka publishing instead of loading everything into memory
 
 ### LLM as a Judge
-For a platform like SellWizr that ingests financial data, an LLM validation layer could be added post-ingestion to flag schema anomalies — for example, flagging if a column named `revenue` was inferred as VARCHAR instead of INT, or if values look like dates but were stored as strings. This feedback loop would improve schema inference accuracy over time.
+For a platform like SellWizr that ingests financial data, an LLM validation layer could be added post-ingestion to flag schema anomalies, for example, flagging if a column named `revenue` was inferred as VARCHAR instead of INT, or if values look like dates but were stored as strings. This feedback loop would improve schema inference accuracy over time.
 
 ### Handling Heavy URLs
 The current implementation loads the full HTML response into memory before parsing. For pages with very large tables:
@@ -109,11 +105,11 @@ The current implementation loads the full HTML response into memory before parsi
 
 | Metric | Value |
 |--------|-------|
-| End-to-end ingestion (51 rows) | ~60 seconds |
+| End-to-end ingestion (51 rows) | ~4 seconds (after batch publishing optimisation) |
 | DB batch insert latency | 52ms per batch of 10 rows |
 | HTTP fetch with retries (worst case) | 90 seconds (3 attempts × 30s timeout) |
-| Kafka publish per row | ~1 second → 4 seconds total after batching (12x improvement) |
+| Kafka publish (51 rows) | 4 seconds total (12x improvement over default) |
 | Data loss on failure | 0% (DLQ guarantees no silent drops) |
 
-### Known Performance Bottleneck
-The producer currently publishes one row per second due to Kafka's default linger settings. This can be improved by batching multiple rows into a single Kafka message or tuning `BatchSize` and `Linger` on the kafka-go writer — a straightforward config change that would reduce end-to-end time from ~60s to under 5s for 51 rows.
+### Performance Optimisation Applied
+Kafka batch publishing was enabled (`BatchSize: 100`, `BatchTimeout: 10ms`), reducing producer time from ~51 seconds to 4 seconds — a 12x improvement. This reduced 51 individual network round trips to a single batched publish.

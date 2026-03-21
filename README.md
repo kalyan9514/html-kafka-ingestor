@@ -13,7 +13,7 @@ This pipeline is deployed and running on Railway.
 | Service | Status |
 |---------|--------|
 | Kafka Broker | Railway — kafka.railway.internal:29092 |
-| MySQL | Railway — 50 rows ingested |
+| MySQL | Railway — live, auto-created schema |
 | Consumer | Live — listening for messages |
 | Producer | Deployed — triggers on each run |
 
@@ -48,7 +48,7 @@ Kafka Producer → [html-records topic]
 ## Features
 
 - Fetches any URL with configurable retries and timeout
-- Parses HTML wikitables and infers SQL types (INT, FLOAT, VARCHAR)
+- Parses HTML wikitables and infers SQL types (INT, FLOAT, VARCHAR, DATE)
 - Streams rows through Kafka with JSON serialisation
 - Dynamically creates MySQL tables based on inferred schema
 - Batch inserts for efficiency
@@ -69,13 +69,13 @@ Kafka Producer → [html-records topic]
 | Database | MySQL 8.0 |
 | Metrics | Prometheus + Grafana |
 | Containerisation | Docker Compose |
-| CI | GitHub Actions |
+| CI/CD | GitHub Actions + Railway |
 
 ---
 
 ## Prerequisites
 
-- Go 1.22+
+- Go 1.26+
 - Docker Desktop
 
 ---
@@ -118,6 +118,10 @@ go run cmd/consumer/main.go
 ```bash
 docker exec -it mysql mysql -u ingestor -pingestor_pass ingestor_db -e "SELECT * FROM ingested_data LIMIT 10;"
 ```
+
+**8. View metrics in Grafana**
+- Open http://localhost:3000 (admin/admin)
+- Go to Dashboards → Import → Upload `config/grafana/dashboard.json`
 
 ---
 
@@ -169,17 +173,25 @@ curl http://localhost:8080/jobs
 ## Project Structure
 ```
 ├── cmd/
-│   ├── producer/       # Fetches URL, parses table, publishes to Kafka
-│   └── consumer/       # Reads from Kafka, inserts into MySQL
+│   ├── producer/           # Fetches URL, parses table, publishes to Kafka
+│   └── consumer/           # Reads from Kafka, inserts into MySQL
 ├── internal/
-│   ├── fetcher/        # HTTP client with retries and timeout
-│   ├── parser/         # HTML table extraction and type inference
-│   ├── kafka/          # Producer, consumer, and DLQ
-│   ├── db/             # MySQL connection and batch insert
-│   ├── metrics/        # Prometheus metrics
-│   └── api/            # REST API endpoints
-├── config/             # Config loader and Prometheus config
-├── .github/workflows/  # GitHub Actions CI
-├── docker-compose.yml  # All services
-└── .env                # Local credentials (not committed)
+│   ├── fetcher/            # HTTP client with retries and timeout
+│   ├── parser/             # HTML table extraction and type inference
+│   ├── kafka/              # Producer, consumer, and DLQ
+│   ├── db/                 # MySQL connection and batch insert
+│   ├── metrics/            # Prometheus metrics
+│   └── api/                # REST API endpoints
+├── config/
+│   ├── config.go           # Config loader
+│   ├── prometheus.yml      # Prometheus scrape config
+│   └── grafana/
+│       └── dashboard.json  # Pre-built Grafana dashboard
+├── .github/workflows/
+│   └── ci.yml              # GitHub Actions CI/CD
+├── Dockerfile.producer     # Docker image for producer
+├── Dockerfile.consumer     # Docker image for consumer
+├── docker-compose.yml      # All local services
+├── .env.example            # Safe credentials template
+└── .env                    # Local credentials (not committed)
 ```
