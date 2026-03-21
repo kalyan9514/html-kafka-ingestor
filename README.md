@@ -112,6 +112,8 @@ docker exec -it mysql mysql -u ingestor -pingestor_pass ingestor_db -e "SELECT *
 | Metrics endpoint | http://localhost:2112/metrics |
 | REST API | http://localhost:8080 |
 
+**To import the dashboard:** In Grafana, go to Dashboards → Import → Upload `config/grafana/dashboard.json`
+
 ---
 
 ## REST API
