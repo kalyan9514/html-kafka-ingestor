@@ -158,11 +158,25 @@ func textContent(n *html.Node) string {
 	return sb.String()
 }
 
-// cleanText normalises whitespace and trims surrounding spaces.
+// cleanText normalises whitespace, trims surrounding spaces,
+// and strips common Wikipedia data quality issues.
 func cleanText(s string) string {
 	s = strings.TrimSpace(s)
 	s = strings.Join(strings.Fields(s), " ")
-	return s
+
+	// replace em dashes used for missing data with empty string
+	s = strings.ReplaceAll(s, "—", "")
+	s = strings.ReplaceAll(s, "–", "")
+
+	// strip trailing reference markers like [a], [b], [1]
+	re := regexp.MustCompile(`\[[^\]]*\]$`)
+	s = re.ReplaceAllString(s, "")
+
+	// convert parenthesised negatives like (500) to -500
+	reNeg := regexp.MustCompile(`^\((\d+\.?\d*)\)$`)
+	s = reNeg.ReplaceAllString(s, "-$1")
+
+	return strings.TrimSpace(s)
 }
 
 // cleanNumeric strips currency symbols and commas so numeric strings can be parsed.
