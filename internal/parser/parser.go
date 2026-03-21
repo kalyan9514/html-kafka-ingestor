@@ -100,7 +100,10 @@ func extractTable(table *html.Node) *Table {
 			if len(headers) == 0 && hasThCells(n) {
 				headers = cells
 			} else if len(headers) > 0 {
-				rawRows = append(rawRows, cells)
+				// skip rows that repeat the header — Wikipedia sometimes adds these mid-table
+				if !isHeaderRepeat(cells, headers) {
+					rawRows = append(rawRows, cells)
+				}
 			}
 		}
 		for c := n.FirstChild; c != nil; c = c.NextSibling {
@@ -150,14 +153,19 @@ func inferColumnType(colIdx int, rows [][]string) string {
 		if colIdx >= len(row) {
 			continue
 		}
-		val := cleanNumeric(row[colIdx])
-		if val == "" {
+		raw := strings.TrimSpace(row[colIdx])
+		if raw == "" {
 			continue
 		}
-		if _, err := strconv.ParseInt(val, 10, 64); err != nil {
+		// check raw value first — if it contains letters it's VARCHAR
+		cleaned := cleanNumeric(raw)
+		if cleaned == "" {
+			return "VARCHAR(255)" // raw had content but no numbers — definitely text
+		}
+		if _, err := strconv.ParseInt(cleaned, 10, 64); err != nil {
 			isInt = false
 		}
-		if _, err := strconv.ParseFloat(val, 64); err != nil {
+		if _, err := strconv.ParseFloat(cleaned, 64); err != nil {
 			isFloat = false
 		}
 	}
@@ -215,4 +223,16 @@ func hasThCells(n *html.Node) bool {
 		}
 	}
 	return false
+}
+
+// isHeaderRepeat returns true if a row contains the same values as the header.
+// Wikipedia sometimes repeats header rows mid-table for readability.
+func isHeaderRepeat(cells, headers []string) bool {
+    matches := 0
+    for i, cell := range cells {
+        if i < len(headers) && strings.EqualFold(cell, headers[i]) {
+            matches++
+        }
+    }
+    return matches > len(headers)/2
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"time"
 
@@ -15,7 +16,6 @@ import (
 func main() {
 	cfg := config.Load()
 
-	// start metrics server so Prometheus can scrape producer health
 	metrics.StartServer(cfg.MetricsPort)
 
 	f := fetcher.New(30*time.Second, 3)
@@ -35,11 +35,21 @@ func main() {
 	defer producer.Close()
 
 	ctx := context.Background()
+
+	// publish schema as first message so consumer can create the table before inserting
+	schemaBytes, err := json.Marshal(table.Columns)
+	if err != nil {
+		log.Fatalf("Failed to serialise schema: %v", err)
+	}
+	if err := producer.PublishSchema(ctx, schemaBytes); err != nil {
+		log.Fatalf("Failed to publish schema: %v", err)
+	}
+
 	for i, row := range table.Rows {
 		if err := producer.PublishRow(ctx, i, row); err != nil {
 			log.Printf("Failed to publish row %d: %v", i, err)
 		}
 	}
 
-	log.Printf("Producer finished — published %d rows to Kafka topic %s", len(table.Rows), cfg.KafkaTopic)
+	log.Printf("Producer finished — published schema + %d rows to Kafka topic %s", len(table.Rows), cfg.KafkaTopic)
 }

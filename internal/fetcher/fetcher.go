@@ -1,6 +1,7 @@
 package fetcher
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -8,7 +9,7 @@ import (
 	"time"
 )
 
-// Fetcher wraps a HTTP client with retry and timeout behaviour.
+// Fetcher wraps an HTTP client with retry and timeout behaviour.
 // Decoupled from the parser so each can be tested and replaced independently.
 type Fetcher struct {
 	client     *http.Client
@@ -26,16 +27,28 @@ func New(timeout time.Duration, maxRetries int) *Fetcher {
 	}
 }
 
-// Here, Fetch retrieves the HTML at the given URL.
+// Fetch retrieves the HTML at the given URL.
 // Uses linear backoff between retries to avoid overwhelming a slow or rate-limiting server.
 // Returns the full body as a string so the parser stays decoupled from HTTP concerns.
 func (f *Fetcher) Fetch(url string) (string, error) {
 	var lastErr error
+	ctx := context.Background()
 
 	for attempt := 1; attempt <= f.maxRetries; attempt++ {
 		log.Printf("Fetching URL (attempt %d/%d): %s", attempt, f.maxRetries, url)
 
-		resp, err := f.client.Get(url)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to create request: %w", err)
+			log.Printf("Attempt %d failed: %v", attempt, lastErr)
+			time.Sleep(time.Duration(attempt) * time.Second)
+			continue
+		}
+
+		// mimic a real browser so servers like Wikipedia don't block us with 403
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+		resp, err := f.client.Do(req)
 		if err != nil {
 			lastErr = fmt.Errorf("request failed: %w", err)
 			log.Printf("Attempt %d failed: %v", attempt, lastErr)

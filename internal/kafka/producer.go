@@ -53,3 +53,17 @@ func (p *Producer) PublishRow(ctx context.Context, rowIndex int, row map[string]
 func (p *Producer) Close() error {
 	return p.writer.Close()
 }
+
+// PublishSchema sends the inferred column schema as the first message.
+// Consumer uses this to create the MySQL table before processing rows.
+func (p *Producer) PublishSchema(ctx context.Context, schemaJSON []byte) error {
+	msg := kafka.Message{
+		Key:   []byte("schema"),
+		Value: schemaJSON,
+	}
+	if err := p.writer.WriteMessages(ctx, msg); err != nil {
+		return fmt.Errorf("failed to publish schema: %w", err)
+	}
+	log.Println("Published schema to Kafka")
+	return nil
+}

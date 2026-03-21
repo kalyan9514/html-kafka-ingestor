@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"regexp"
 
 	_ "github.com/go-sql-driver/mysql" // registers MySQL driver with database/sql
 	"github.com/kalyan9514/html-kafka-ingestor/internal/parser"
@@ -87,7 +88,14 @@ func (d *DB) BatchInsert(tableName string, columns []parser.Column, rows []map[s
 	args := make([]interface{}, 0, len(rows)*len(columns))
 	for _, row := range rows {
 		for _, col := range columns {
-			args = append(args, row[col.Name])
+			val := row[col.Name]
+			if col.DataType == "INT" || col.DataType == "FLOAT" {
+				val = cleanNumeric(val)
+				if val == "" {
+					val = "0"
+				}
+			}
+			args = append(args, val)
 		}
 	}
 
@@ -103,4 +111,10 @@ func (d *DB) BatchInsert(tableName string, columns []parser.Column, rows []map[s
 // Close releases the database connection pool.
 func (d *DB) Close() error {
 	return d.conn.Close()
+}
+
+// cleanNumeric strips currency symbols and commas before inserting numeric values.
+func cleanNumeric(s string) string {
+    re := regexp.MustCompile(`[^\d.\-]`)
+    return re.ReplaceAllString(s, "")
 }
