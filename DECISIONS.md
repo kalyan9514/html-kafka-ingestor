@@ -112,4 +112,4 @@ The current implementation loads the full HTML response into memory before parsi
 | Data loss on failure | 0% (DLQ guarantees no silent drops) |
 
 ### Performance Optimisation Applied
-Kafka batch publishing was enabled (`BatchSize: 100`, `BatchTimeout: 10ms`), reducing producer time from ~51 seconds to 4 seconds — a 12x improvement. This reduced 51 individual network round trips to a single batched publish.
+Kafka batch publishing was enabled (`BatchSize: 100`, `BatchTimeout: 10ms`), reducing producer time from ~51 seconds to 4 seconds, a 12x improvement. This reduced 51 individual network round trips to a single batched publish.
