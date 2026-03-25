@@ -1,6 +1,6 @@
 # HTML Kafka Ingestor
 
-A production-grade data pipeline that scrapes HTML tables from any URL, streams extracted records through Kafka, and persists them into MySQL — with dynamic schema inference, observability, and a REST API.
+A production-grade data pipeline that scrapes HTML tables from any URL, streams extracted records through Kafka, and persists them into MySQL, with dynamic schema inference, observability, and a REST API.
 
 Built as a take-home assignment for SellWizr's Forward Deployed Engineer role.
 
